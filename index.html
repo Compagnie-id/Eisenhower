@@ -1,0 +1,954 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eisenhower Matrix - Task Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap');
+        
+        * {
+            font-family: 'Space Grotesk', sans-serif;
+        }
+        
+        .neubrutalism {
+            border: 3px solid #000;
+            box-shadow: 8px 8px 0px #000;
+            transition: all 0.1s ease;
+        }
+        
+        .neubrutalism:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 10px 10px 0px #000;
+        }
+        
+        .neubrutalism:active {
+            transform: translate(2px, 2px);
+            box-shadow: 6px 6px 0px #000;
+        }
+        
+        .task-card {
+            border: 2px solid #000;
+            box-shadow: 4px 4px 0px #000;
+            transition: all 0.2s ease;
+            position: relative;
+            cursor: move;
+        }
+        
+        .task-card:hover {
+            transform: translate(-2px, -2px);
+            box-shadow: 6px 6px 0px #000;
+        }
+        
+        .task-card.dragging {
+            opacity: 0.5;
+            transform: rotate(5deg);
+            cursor: grabbing;
+        }
+        
+        .quadrant.drag-over {
+            background-color: rgba(255, 255, 255, 0.3);
+            border-color: #333;
+            border-width: 4px;
+        }
+        
+        .completed {
+            text-decoration: line-through;
+            opacity: 0.7;
+        }
+        
+        .status-badge {
+            border: 2px solid #000;
+            box-shadow: 2px 2px 0px #000;
+            font-size: 0.75rem;
+            padding: 2px 8px;
+        }
+        
+        .quadrant {
+            min-height: 300px;
+            border: 3px solid #000;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        
+        .quadrant::before {
+            content: '';
+            position: absolute;
+            inset: -3px;
+            background: linear-gradient(45deg, transparent 48%, #000 50%, transparent 52%);
+            z-index: -1;
+        }
+        
+        .add-btn {
+            animation: gentle-pulse 3s ease-in-out infinite;
+        }
+        
+        @keyframes gentle-pulse {
+            0%, 100% { 
+                transform: scale(1); 
+                box-shadow: 8px 8px 0px #000;
+            }
+            50% { 
+                transform: scale(1.02); 
+                box-shadow: 10px 10px 0px #000;
+            }
+        }
+        
+        .modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            backdrop-filter: blur(4px);
+        }
+        
+        .modal.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .modal-content {
+            border: 4px solid #000;
+            box-shadow: 12px 12px 0px #000;
+            z-index: 1001;
+        }
+        
+        input[type="text"], textarea, select {
+            border: 2px solid #000;
+            box-shadow: 3px 3px 0px #000;
+            transition: all 0.1s ease;
+        }
+        
+        input[type="text"]:focus, textarea:focus, select:focus {
+            outline: none;
+            box-shadow: 5px 5px 0px #000;
+            transform: translate(-2px, -2px);
+        }
+        
+        .time-tracker {
+            font-variant-numeric: tabular-nums;
+        }
+        
+        .error-message {
+            background: #fee;
+            border: 2px solid #f00;
+            color: #c00;
+            padding: 0.5rem;
+            margin-top: 0.5rem;
+            font-weight: bold;
+        }
+        
+        .success-message {
+            background: #efe;
+            border: 2px solid #0c0;
+            color: #060;
+            padding: 0.5rem;
+            margin-top: 0.5rem;
+            font-weight: bold;
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 2000;
+            max-width: 300px;
+            animation: slideIn 0.3s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+        
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-pink-100 min-h-screen p-4">
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-yellow-300 p-2 border-2 border-black font-bold">
+        Skip to main content
+    </a>
+
+    <!-- Header -->
+    <header class="max-w-7xl mx-auto mb-8">
+        <div class="bg-yellow-200 neubrutalism p-6 text-center">
+            <h1 class="text-4xl font-black text-gray-900 mb-2">
+                <i class="fas fa-th-large mr-3" aria-hidden="true"></i>EISENHOWER MATRIX
+            </h1>
+            <p class="text-lg font-medium text-gray-700">Prioritize tasks like a pro!</p>
+        </div>
+    </header>
+
+    <!-- Notification Container -->
+    <div id="notificationContainer" aria-live="polite" aria-atomic="true"></div>
+
+    <!-- Main Matrix Container -->
+    <main id="main-content" class="max-w-7xl mx-auto">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6" role="grid" aria-label="Eisenhower Matrix quadrants">
+            <!-- Quadrant 1: Urgent & Important -->
+            <div class="bg-red-200 quadrant p-4" 
+                 data-quadrant="1" 
+                 ondrop="handleDrop(event)" 
+                 ondragover="handleDragOver(event)" 
+                 ondragleave="handleDragLeave(event)"
+                 role="gridcell"
+                 aria-label="Urgent and Important tasks">
+                <div class="bg-white neubrutalism p-3 mb-4">
+                    <h2 class="text-xl font-bold text-gray-900">
+                        <i class="fas fa-fire text-red-600 mr-2" aria-hidden="true"></i>URGENT & IMPORTANT
+                    </h2>
+                    <p class="text-sm text-gray-600">Do First</p>
+                </div>
+                <div id="q1" class="space-y-3" data-quadrant="1" role="list">
+                    <!-- Tasks will be added here -->
+                </div>
+                <button onclick="openModal(1)" 
+                        class="mt-4 w-full bg-red-300 hover:bg-red-400 neubrutalism p-3 font-bold text-gray-900 add-btn"
+                        aria-label="Add task to Urgent and Important quadrant">
+                    <i class="fas fa-plus mr-2" aria-hidden="true"></i>Add Task
+                </button>
+            </div>
+
+            <!-- Quadrant 2: Not Urgent & Important -->
+            <div class="bg-blue-200 quadrant p-4" 
+                 data-quadrant="2" 
+                 ondrop="handleDrop(event)" 
+                 ondragover="handleDragOver(event)" 
+                 ondragleave="handleDragLeave(event)"
+                 role="gridcell"
+                 aria-label="Not Urgent and Important tasks">
+                <div class="bg-white neubrutalism p-3 mb-4">
+                    <h2 class="text-xl font-bold text-gray-900">
+                        <i class="fas fa-calendar-alt text-blue-600 mr-2" aria-hidden="true"></i>NOT URGENT & IMPORTANT
+                    </h2>
+                    <p class="text-sm text-gray-600">Schedule</p>
+                </div>
+                <div id="q2" class="space-y-3" data-quadrant="2" role="list">
+                    <!-- Tasks will be added here -->
+                </div>
+                <button onclick="openModal(2)" 
+                        class="mt-4 w-full bg-blue-300 hover:bg-blue-400 neubrutalism p-3 font-bold text-gray-900 add-btn"
+                        aria-label="Add task to Not Urgent and Important quadrant">
+                    <i class="fas fa-plus mr-2" aria-hidden="true"></i>Add Task
+                </button>
+            </div>
+
+            <!-- Quadrant 3: Urgent & Not Important -->
+            <div class="bg-green-200 quadrant p-4" 
+                 data-quadrant="3" 
+                 ondrop="handleDrop(event)" 
+                 ondragover="handleDragOver(event)" 
+                 ondragleave="handleDragLeave(event)"
+                 role="gridcell"
+                 aria-label="Urgent and Not Important tasks">
+                <div class="bg-white neubrutalism p-3 mb-4">
+                    <h2 class="text-xl font-bold text-gray-900">
+                        <i class="fas fa-users text-green-600 mr-2" aria-hidden="true"></i>URGENT & NOT IMPORTANT
+                    </h2>
+                    <p class="text-sm text-gray-600">Delegate</p>
+                </div>
+                <div id="q3" class="space-y-3" data-quadrant="3" role="list">
+                    <!-- Tasks will be added here -->
+                </div>
+                <button onclick="openModal(3)" 
+                        class="mt-4 w-full bg-green-300 hover:bg-green-400 neubrutalism p-3 font-bold text-gray-900 add-btn"
+                        aria-label="Add task to Urgent and Not Important quadrant">
+                    <i class="fas fa-plus mr-2" aria-hidden="true"></i>Add Task
+                </button>
+            </div>
+
+            <!-- Quadrant 4: Not Urgent & Not Important -->
+            <div class="bg-purple-200 quadrant p-4" 
+                 data-quadrant="4" 
+                 ondrop="handleDrop(event)" 
+                 ondragover="handleDragOver(event)" 
+                 ondragleave="handleDragLeave(event)"
+                 role="gridcell"
+                 aria-label="Not Urgent and Not Important tasks">
+                <div class="bg-white neubrutalism p-3 mb-4">
+                    <h2 class="text-xl font-bold text-gray-900">
+                        <i class="fas fa-trash text-purple-600 mr-2" aria-hidden="true"></i>NOT URGENT & NOT IMPORTANT
+                    </h2>
+                    <p class="text-sm text-gray-600">Eliminate</p>
+                </div>
+                <div id="q4" class="space-y-3" data-quadrant="4" role="list">
+                    <!-- Tasks will be added here -->
+                </div>
+                <button onclick="openModal(4)" 
+                        class="mt-4 w-full bg-purple-300 hover:bg-purple-400 neubrutalism p-3 font-bold text-gray-900 add-btn"
+                        aria-label="Add task to Not Urgent and Not Important quadrant">
+                    <i class="fas fa-plus mr-2" aria-hidden="true"></i>Add Task
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add/Edit Task Modal -->
+    <div id="taskModal" class="modal" role="dialog" aria-labelledby="modalTitle" aria-hidden="true">
+        <div class="modal-content bg-yellow-100 p-8 max-w-md w-full mx-4">
+            <h3 id="modalTitle" class="text-2xl font-bold mb-6 text-gray-900">
+                <i class="fas fa-tasks mr-2" aria-hidden="true"></i>Add New Task
+            </h3>
+            <form id="taskForm" onsubmit="handleSaveTask(event)" novalidate>
+                <div class="mb-4">
+                    <label for="taskTitle" class="block text-sm font-bold mb-2 text-gray-700">
+                        Task Title <span class="text-red-600">*</span>
+                    </label>
+                    <input type="text" 
+                           id="taskTitle" 
+                           required 
+                           maxlength="100"
+                           class="w-full p-3 bg-white font-medium" 
+                           placeholder="Enter task title..."
+                           aria-describedby="titleError">
+                    <div id="titleError" class="error-message hidden" role="alert"></div>
+                </div>
+                <div class="mb-4">
+                    <label for="taskDescription" class="block text-sm font-bold mb-2 text-gray-700">
+                        Description
+                    </label>
+                    <textarea id="taskDescription" 
+                              rows="3" 
+                              maxlength="500"
+                              class="w-full p-3 bg-white font-medium" 
+                              placeholder="Enter description..."
+                              aria-describedby="descError"></textarea>
+                    <div id="descError" class="error-message hidden" role="alert"></div>
+                </div>
+                <div class="mb-6">
+                    <label for="taskStatus" class="block text-sm font-bold mb-2 text-gray-700">
+                        Status
+                    </label>
+                    <select id="taskStatus" class="w-full p-3 bg-white font-medium">
+                        <option value="not-started">Not Started</option>
+                        <option value="in-progress">In Progress</option>
+                        <option value="completed">Completed</option>
+                    </select>
+                </div>
+                <div class="flex gap-3">
+                    <button type="submit" 
+                            class="flex-1 bg-green-300 hover:bg-green-400 neubrutalism p-3 font-bold text-gray-900">
+                        <i class="fas fa-save mr-2" aria-hidden="true"></i>Save Task
+                    </button>
+                    <button type="button" 
+                            onclick="closeModal()" 
+                            class="flex-1 bg-gray-300 hover:bg-gray-400 neubrutalism p-3 font-bold text-gray-900">
+                        <i class="fas fa-times mr-2" aria-hidden="true"></i>Cancel
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // Application State Manager
+        class TaskManager {
+            constructor() {
+                this.tasks = this.loadTasks();
+                this.currentQuadrant = null;
+                this.editingTaskId = null;
+                this.draggedTask = null;
+                this.draggedFromQuadrant = null;
+                this.timerInterval = null;
+                this.init();
+            }
+
+            init() {
+                this.renderAllTasks();
+                this.startTimer();
+                this.setupEventListeners();
+                this.validateData();
+            }
+
+            // Data persistence with error handling
+            loadTasks() {
+                try {
+                    const stored = localStorage.getItem('eisenhowerTasks');
+                    if (!stored) return this.getDefaultTasks();
+                    
+                    const tasks = JSON.parse(stored);
+                    return this.validateAndCleanTasks(tasks);
+                } catch (error) {
+                    console.error('Error loading tasks:', error);
+                    this.showNotification('Failed to load tasks. Using default data.', 'error');
+                    return this.getDefaultTasks();
+                }
+            }
+
+            getDefaultTasks() {
+                return {};
+            }
+
+            validateAndCleanTasks(tasks) {
+                const cleanTasks = {};
+                const validQuadrants = ['1', '2', '3', '4'];
+                const validStatuses = ['not-started', 'in-progress', 'completed'];
+                
+                Object.keys(tasks).forEach(quadrant => {
+                    if (validQuadrants.includes(quadrant)) {
+                        cleanTasks[quadrant] = (tasks[quadrant] || [])
+                            .filter(task => this.isValidTask(task))
+                            .map(task => this.cleanTask(task));
+                    }
+                });
+                
+                return cleanTasks;
+            }
+
+            isValidTask(task) {
+                return task && 
+                       typeof task === 'object' &&
+                       typeof task.id === 'string' &&
+                       typeof task.title === 'string' &&
+                       task.title.trim().length > 0 &&
+                       task.title.length <= 100;
+            }
+
+            cleanTask(task) {
+                return {
+                    id: task.id || this.generateId(),
+                    title: this.sanitizeString(task.title).substring(0, 100),
+                    description: this.sanitizeString(task.description || '').substring(0, 500),
+                    status: ['not-started', 'in-progress', 'completed'].includes(task.status) ? task.status : 'not-started',
+                    createdAt: task.createdAt || new Date().toISOString(),
+                    updatedAt: task.updatedAt || new Date().toISOString(),
+                    startTime: task.startTime || null
+                };
+            }
+
+            sanitizeString(str) {
+                if (typeof str !== 'string') return '';
+                return str.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+                         .replace(/javascript:/gi, '')
+                         .trim();
+            }
+
+            saveTasks() {
+                try {
+                    localStorage.setItem('eisenhowerTasks', JSON.stringify(this.tasks));
+                    return true;
+                } catch (error) {
+                    console.error('Error saving tasks:', error);
+                    this.showNotification('Failed to save tasks. Storage might be full.', 'error');
+                    return false;
+                }
+            }
+
+            validateData() {
+                // Check for data integrity
+                let hasErrors = false;
+                Object.keys(this.tasks).forEach(quadrant => {
+                    this.tasks[quadrant].forEach(task => {
+                        if (!task.id || !task.title) {
+                            hasErrors = true;
+                        }
+                    });
+                });
+                
+                if (hasErrors) {
+                    this.showNotification('Data integrity issues detected. Some tasks may have been cleaned.', 'warning');
+                }
+            }
+
+            generateId() {
+                return Date.now().toString(36) + Math.random().toString(36).substr(2);
+            }
+
+            // Timer management
+            startTimer() {
+                if (this.timerInterval) clearInterval(this.timerInterval);
+                this.timerInterval = setInterval(() => this.updateTimers(), 10000);
+            }
+
+            stopTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
+                }
+            }
+
+            updateTimers() {
+                document.querySelectorAll('.time-tracker').forEach(timer => {
+                    const taskId = timer.dataset.taskId;
+                    const quadrant = timer.dataset.quadrant;
+                    
+                    if (taskId && quadrant && this.tasks[quadrant]) {
+                        const task = this.tasks[quadrant].find(t => t.id === taskId);
+                        if (task && task.startTime) {
+                            timer.innerHTML = `<i class="fas fa-clock mr-1" aria-hidden="true"></i>${this.getTimeInProgress(task.startTime)}`;
+                        }
+                    }
+                });
+            }
+
+            getTimeInProgress(startTime) {
+                if (!startTime) return '';
+                
+                try {
+                    const start = new Date(startTime);
+                    const now = new Date();
+                    const diff = now - start;
+                    
+                    if (diff < 0) return 'Invalid time';
+                    
+                    const hours = Math.floor(diff / (1000 * 60 * 60));
+                    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                    
+                    if (hours > 24) {
+                        const days = Math.floor(hours / 24);
+                        return `${days}d ${hours % 24}h`;
+                    }
+                    return `${hours}h ${minutes}m`;
+                } catch (error) {
+                    console.error('Error calculating time:', error);
+                    return 'Error';
+                }
+            }
+
+            // Task operations
+            createTask(title, description, status, quadrant) {
+                const newTask = {
+                    id: this.generateId(),
+                    title: this.sanitizeString(title),
+                    description: this.sanitizeString(description),
+                    status,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    startTime: status === 'in-progress' ? new Date().toISOString() : null
+                };
+                
+                if (!this.tasks[quadrant]) {
+                    this.tasks[quadrant] = [];
+                }
+                
+                this.tasks[quadrant].push(newTask);
+                return newTask;
+            }
+
+            updateTask(quadrant, taskId, updates) {
+                const taskIndex = this.tasks[quadrant].findIndex(t => t.id === taskId);
+                if (taskIndex === -1) return false;
+                
+                const task = this.tasks[quadrant][taskIndex];
+                const oldStatus = task.status;
+                
+                // Apply updates with validation
+                Object.keys(updates).forEach(key => {
+                    if (key === 'title') {
+                        task[key] = this.sanitizeString(updates[key]).substring(0, 100);
+                    } else if (key === 'description') {
+                        task[key] = this.sanitizeString(updates[key]).substring(0, 500);
+                    } else if (key === 'status') {
+                        task[key] = ['not-started', 'in-progress', 'completed'].includes(updates[key]) ? updates[key] : task.status;
+                    }
+                });
+                
+                task.updatedAt = new Date().toISOString();
+                
+                // Handle timer for status changes
+                if (task.status === 'in-progress' && oldStatus !== 'in-progress') {
+                    task.startTime = new Date().toISOString();
+                } else if (task.status !== 'in-progress') {
+                    task.startTime = null;
+                }
+                
+                return true;
+            }
+
+            deleteTask(quadrant, taskId) {
+                const taskIndex = this.tasks[quadrant].findIndex(t => t.id === taskId);
+                if (taskIndex === -1) return false;
+                
+                this.tasks[quadrant].splice(taskIndex, 1);
+                return true;
+            }
+
+            moveTask(fromQuadrant, toQuadrant, taskId) {
+                const taskIndex = this.tasks[fromQuadrant].findIndex(t => t.id === taskId);
+                if (taskIndex === -1) return false;
+                
+                const task = this.tasks[fromQuadrant].splice(taskIndex, 1)[0];
+                task.updatedAt = new Date().toISOString();
+                
+                if (!this.tasks[toQuadrant]) {
+                    this.tasks[toQuadrant] = [];
+                }
+                
+                this.tasks[toQuadrant].push(task);
+                return true;
+            }
+
+            // Rendering
+            renderTasks(quadrant) {
+                const container = document.getElementById(`q${quadrant}`);
+                const quadrantTasks = this.tasks[quadrant] || [];
+                
+                if (quadrantTasks.length === 0) {
+                    container.innerHTML = '<p class="text-gray-500 text-center py-8">No tasks yet. Add one above!</p>';
+                    return;
+                }
+                
+                container.innerHTML = quadrantTasks.map(task => this.createTaskHTML(task, quadrant)).join('');
+            }
+
+            createTaskHTML(task, quadrant) {
+                const isCompleted = task.status === 'completed';
+                const timeInProgress = this.getTimeInProgress(task.startTime);
+                const statusColors = {
+                    'not-started': 'bg-gray-200',
+                    'in-progress': 'bg-yellow-200',
+                    'completed': 'bg-green-200'
+                };
+                
+                return `
+                    <div class="task-card bg-white p-4 ${isCompleted ? 'completed' : ''}" 
+                         draggable="true" 
+                         ondragstart="handleDragStart(event, ${quadrant}, '${task.id}')"
+                         ondragend="handleDragEnd(event)"
+                         role="listitem"
+                         aria-label="Task: ${task.title}, Status: ${task.status}">
+                        <div class="flex justify-between items-start mb-2">
+                            <h3 class="font-bold text-gray-900 flex-1 mr-2">${this.escapeHtml(task.title)}</h3>
+                            <div class="flex gap-2">
+                                <button onclick="taskManager.toggleComplete(${quadrant}, '${task.id}')" 
+                                        class="text-gray-600 hover:text-green-600" 
+                                        title="Toggle Complete"
+                                        aria-label="Toggle complete status for ${task.title}">
+                                    <i class="fas fa-check-circle" aria-hidden="true"></i>
+                                </button>
+                                <button onclick="taskManager.openEditModal(${quadrant}, '${task.id}')" 
+                                        class="text-gray-600 hover:text-blue-600" 
+                                        title="Edit"
+                                        aria-label="Edit task ${task.title}">
+                                    <i class="fas fa-edit" aria-hidden="true"></i>
+                                </button>
+                                <button onclick="taskManager.confirmDelete(${quadrant}, '${task.id}')" 
+                                        class="text-gray-600 hover:text-red-600" 
+                                        title="Delete"
+                                        aria-label="Delete task ${task.title}">
+                                    <i class="fas fa-trash" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </div>
+                        ${task.description ? `<p class="text-sm text-gray-600 mb-3">${this.escapeHtml(task.description)}</p>` : ''}
+                        <div class="flex justify-between items-center">
+                            <select onchange="taskManager.changeStatus(${quadrant}, '${task.id}', this.value)" 
+                                    class="status-badge ${statusColors[task.status]} font-medium cursor-pointer"
+                                    aria-label="Change status for ${task.title}">
+                                <option value="not-started" ${task.status === 'not-started' ? 'selected' : ''}>Not Started</option>
+                                <option value="in-progress" ${task.status === 'in-progress' ? 'selected' : ''}>In Progress</option>
+                                <option value="completed" ${task.status === 'completed' ? 'selected' : ''}>Completed</option>
+                            </select>
+                            ${task.status === 'in-progress' ? 
+                                `<span class="time-tracker text-xs font-bold text-gray-700" 
+                                       data-task-id="${task.id}" 
+                                       data-quadrant="${quadrant}">
+                                    <i class="fas fa-clock mr-1" aria-hidden="true"></i>${timeInProgress}
+                                </span>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            renderAllTasks() {
+                for (let i = 1; i <= 4; i++) {
+                    this.renderTasks(i);
+                }
+            }
+
+            // UI Operations
+            openModal(quadrant, taskId = null) {
+                this.currentQuadrant = quadrant;
+                const modal = document.getElementById('taskModal');
+                const modalTitle = document.getElementById('modalTitle');
+                const form = document.getElementById('taskForm');
+                
+                // Clear previous errors
+                this.clearFormErrors();
+                
+                if (taskId) {
+                    this.editingTaskId = taskId;
+                    const task = this.tasks[quadrant].find(t => t.id === taskId);
+                    if (task) {
+                        modalTitle.textContent = 'Edit Task';
+                        document.getElementById('taskTitle').value = task.title;
+                        document.getElementById('taskDescription').value = task.description;
+                        document.getElementById('taskStatus').value = task.status;
+                    }
+                } else {
+                    this.editingTaskId = null;
+                    modalTitle.textContent = 'Add New Task';
+                    form.reset();
+                }
+                
+                modal.classList.add('active');
+                modal.setAttribute('aria-hidden', 'false');
+                document.getElementById('taskTitle').focus();
+            }
+
+            openEditModal(quadrant, taskId) {
+                this.openModal(quadrant, taskId);
+            }
+
+            closeModal() {
+                const modal = document.getElementById('taskModal');
+                modal.classList.remove('active');
+                modal.setAttribute('aria-hidden', 'true');
+                document.getElementById('taskForm').reset();
+                this.clearFormErrors();
+                this.editingTaskId = null;
+                this.currentQuadrant = null;
+            }
+
+            clearFormErrors() {
+                document.querySelectorAll('.error-message').forEach(el => {
+                    el.classList.add('hidden');
+                    el.textContent = '';
+                });
+            }
+
+            validateForm() {
+                const title = document.getElementById('taskTitle').value.trim();
+                const description = document.getElementById('taskDescription').value.trim();
+                let isValid = true;
+                
+                this.clearFormErrors();
+                
+                if (!title) {
+                    this.showFieldError('titleError', 'Task title is required');
+                    isValid = false;
+                } else if (title.length > 100) {
+                    this.showFieldError('titleError', 'Task title must be less than 100 characters');
+                    isValid = false;
+                }
+                
+                if (description.length > 500) {
+                    this.showFieldError('descError', 'Description must be less than 500 characters');
+                    isValid = false;
+                }
+                
+                return isValid;
+            }
+
+            showFieldError(fieldId, message) {
+                const errorElement = document.getElementById(fieldId);
+                errorElement.textContent = message;
+                errorElement.classList.remove('hidden');
+            }
+
+            saveTask(title, description, status) {
+                if (!this.validateForm()) return false;
+                
+                try {
+                    if (this.editingTaskId) {
+                        const success = this.updateTask(this.currentQuadrant, this.editingTaskId, {
+                            title, description, status
+                        });
+                        if (success) {
+                            this.showNotification('Task updated successfully!', 'success');
+                        } else {
+                            this.showNotification('Failed to update task', 'error');
+                            return false;
+                        }
+                    } else {
+                        this.createTask(title, description, status, this.currentQuadrant);
+                        this.showNotification('Task created successfully!', 'success');
+                    }
+                    
+                    if (this.saveTasks()) {
+                        this.renderAllTasks();
+                        this.closeModal();
+                        return true;
+                    }
+                } catch (error) {
+                    console.error('Error saving task:', error);
+                    this.showNotification('An error occurred while saving the task', 'error');
+                }
+                
+                return false;
+            }
+
+            toggleComplete(quadrant, taskId) {
+                const task = this.tasks[quadrant].find(t => t.id === taskId);
+                if (task) {
+                    const newStatus = task.status === 'completed' ? 'not-started' : 'completed';
+                    this.changeStatus(quadrant, taskId, newStatus);
+                }
+            }
+
+            changeStatus(quadrant, taskId, newStatus) {
+                if (this.updateTask(quadrant, taskId, { status: newStatus })) {
+                    this.saveTasks();
+                    this.renderAllTasks();
+                }
+            }
+
+            confirmDelete(quadrant, taskId) {
+                const task = this.tasks[quadrant].find(t => t.id === taskId);
+                if (task && confirm(`Are you sure you want to delete "${task.title}"?`)) {
+                    if (this.deleteTask(quadrant, taskId)) {
+                        this.saveTasks();
+                        this.renderAllTasks();
+                        this.showNotification('Task deleted successfully', 'success');
+                    }
+                }
+            }
+
+            showNotification(message, type = 'info') {
+                const container = document.getElementById('notificationContainer');
+                const notification = document.createElement('div');
+                notification.className = `notification neubrutalism p-4 mb-2 ${
+                    type === 'error' ? 'bg-red-200' : 
+                    type === 'success' ? 'bg-green-200' : 
+                    type === 'warning' ? 'bg-yellow-200' : 'bg-blue-200'
+                }`;
+                notification.innerHTML = `
+                    <div class="flex items-center">
+                        <i class="fas ${
+                            type === 'error' ? 'fa-exclamation-circle text-red-600' : 
+                            type === 'success' ? 'fa-check-circle text-green-600' : 
+                            type === 'warning' ? 'fa-exclamation-triangle text-yellow-600' : 
+                            'fa-info-circle text-blue-600'
+                        } mr-2"></i>
+                        <span class="font-medium">${message}</span>
+                    </div>
+                `;
+                
+                container.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.style.animation = 'slideIn 0.3s ease-out reverse';
+                    setTimeout(() => {
+                        container.removeChild(notification);
+                    }, 300);
+                }, 3000);
+            }
+
+            setupEventListeners() {
+                // Modal close on outside click
+                document.getElementById('taskModal').addEventListener('click', (e) => {
+                    if (e.target.id === 'taskModal') {
+                        this.closeModal();
+                    }
+                });
+
+                // Keyboard navigation
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'Escape') {
+                        this.closeModal();
+                    }
+                });
+
+                // Form validation on input
+                document.getElementById('taskTitle').addEventListener('input', (e) => {
+                    if (e.target.value.trim()) {
+                        document.getElementById('titleError').classList.add('hidden');
+                    }
+                });
+
+                // Cleanup on page unload
+                window.addEventListener('beforeunload', () => {
+                    this.stopTimer();
+                });
+            }
+        }
+
+        // Initialize the application
+        let taskManager;
+        document.addEventListener('DOMContentLoaded', () => {
+            taskManager = new TaskManager();
+        });
+
+        // Global event handlers (needed for inline event handlers)
+        function handleDragStart(event, quadrant, taskId) {
+            taskManager.draggedTask = taskId;
+            taskManager.draggedFromQuadrant = quadrant;
+            event.dataTransfer.effectAllowed = 'move';
+            event.target.classList.add('dragging');
+        }
+
+        function handleDragEnd(event) {
+            event.target.classList.remove('dragging');
+            document.querySelectorAll('.quadrant').forEach(q => {
+                q.classList.remove('drag-over');
+            });
+        }
+
+        function handleDragOver(event) {
+            event.preventDefault();
+            event.currentTarget.classList.add('drag-over');
+        }
+
+        function handleDragLeave(event) {
+            if (event.currentTarget.classList.contains('quadrant')) {
+                event.currentTarget.classList.remove('drag-over');
+            }
+        }
+
+        function handleDrop(event) {
+            event.preventDefault();
+            const toQuadrant = parseInt(event.currentTarget.dataset.quadrant);
+            
+            if (taskManager.draggedTask && taskManager.draggedFromQuadrant !== toQuadrant) {
+                if (taskManager.moveTask(taskManager.draggedFromQuadrant, toQuadrant, taskManager.draggedTask)) {
+                    taskManager.saveTasks();
+                    taskManager.renderAllTasks();
+                    taskManager.showNotification('Task moved successfully!', 'success');
+                }
+            }
+            
+            event.currentTarget.classList.remove('drag-over');
+            taskManager.draggedTask = null;
+            taskManager.draggedFromQuadrant = null;
+        }
+
+        function openModal(quadrant) {
+            taskManager.openModal(quadrant);
+        }
+
+        function closeModal() {
+            taskManager.closeModal();
+        }
+
+        function handleSaveTask(event) {
+            event.preventDefault();
+            const title = document.getElementById('taskTitle').value.trim();
+            const description = document.getElementById('taskDescription').value.trim();
+            const status = document.getElementById('taskStatus').value;
+            taskManager.saveTask(title, description, status);
+        }
+    </script>
+</body>
+</html>
